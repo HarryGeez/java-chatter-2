@@ -16,7 +16,7 @@ import java.net.Socket;
  * Created by weijiangan on 14/10/2016.
  */
 public class ChatScreenForm {
-    private JTextArea taConvo;
+    protected JTextArea taConvo;
     private JTextArea taMessage;
     private JButton sendButton;
     private JButton broadcastButton;
@@ -24,8 +24,8 @@ public class ChatScreenForm {
     private JFrame frame;
     private JFileChooser fileChooser;
     private PrintWriter out;
-    private InetAddress multicastGroupAddress;
-    private MulticastSocket mcSocket;
+    InetAddress multicastGroupAddress;
+    MulticastSocket mcSocket;
 
 
     public ChatScreenForm() {
@@ -37,6 +37,7 @@ public class ChatScreenForm {
         sendButton.addActionListener(new sendMessageListeners());
         broadcastButton.addActionListener(new sendMessageListeners());
         frame.pack();
+        frame.setMinimumSize(frame.getSize());
         frame.setVisible(true);
     }
 
@@ -70,7 +71,6 @@ public class ChatScreenForm {
 
         @Override
         public void keyTyped(KeyEvent e) {}
-
     }
 
     private void createMenuBar() {
@@ -137,25 +137,10 @@ public class ChatScreenForm {
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
         // Listen for broadcast
-        new Thread(() -> {
-            try {
-                mcSocket.joinGroup(multicastGroupAddress);
-                byte[] buffer = new byte[1024];
-                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+        new BroadcastReceiver(this).start();
 
-                while (true) {
-                    mcSocket.receive(packet);
-                    String received = new String(packet.getData(), 0, packet.getLength());
-                    taConvo.append(received + "\n");
-                }
-            } catch (Exception e) {
-                JOptionPane.showMessageDialog(null, "Exception occurred while listening for broadcast: " +
-                        e, "Error", JOptionPane.ERROR_MESSAGE);
-                System.exit(1);
-            } finally {
-                mcSocket.close();
-            }
-        }).start();
+        VoiceTransmitter caller = new VoiceTransmitter("127.0.0.1", 9876);
+        VoiceReceiver reciever = new VoiceReceiver(9877);
 
         while (true) {
             message = in.readLine();
@@ -167,8 +152,8 @@ public class ChatScreenForm {
         ChatScreenForm chatScreen = new ChatScreenForm();
         try {
             chatScreen.run();
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(null, "Exception occurred: " + ex, "Error", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Exception occurred: " + e, "Error", JOptionPane.ERROR_MESSAGE);
             System.exit(1);
         }
     }
