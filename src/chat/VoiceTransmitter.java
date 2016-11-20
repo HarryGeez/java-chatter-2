@@ -12,6 +12,7 @@ import java.net.InetAddress;
 public class VoiceTransmitter extends Thread {
     private InetAddress ipAddress;
     private AudioFormat format;
+    private DatagramSocket serverSocket;
     private int port;
 
     VoiceTransmitter(String address, int port) throws Exception {
@@ -22,22 +23,27 @@ public class VoiceTransmitter extends Thread {
 
     public void run() {
         try {
-            DatagramSocket serverSocket = new DatagramSocket();
+            serverSocket = new DatagramSocket();
             DataLine.Info targetInfo = new DataLine.Info(TargetDataLine.class, format);
             TargetDataLine targetLine = (TargetDataLine) AudioSystem.getLine(targetInfo);
             targetLine.open(format, 1024);
             targetLine.start();
-
-            int numBytesRead;
             byte[] buffer = new byte[targetLine.getBufferSize() / 4];
 
             while (true) {
-                numBytesRead = targetLine.read(buffer, 0, buffer.length);
+                if (!ChatForm.CALLING) {
+                    targetLine.stop();
+                    targetLine.drain();
+                    break;
+                }
+                targetLine.read(buffer, 0, buffer.length);
                 serverSocket.send(new DatagramPacket(buffer, buffer.length, ipAddress, port));
             }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(null, "Exception occurred making call: " + e,
                     "Error", JOptionPane.ERROR_MESSAGE);
+        } finally {
+            serverSocket.close();
         }
     }
 }

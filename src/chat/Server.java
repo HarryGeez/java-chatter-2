@@ -2,6 +2,8 @@ package chat;
 
 import java.io.*;
 import java.net.*;
+import java.rmi.Naming;
+import java.rmi.registry.LocateRegistry;
 import java.util.Vector;
 import java.util.concurrent.ArrayBlockingQueue;
 
@@ -21,11 +23,13 @@ public class Server {
 
         clientQueue = new ArrayBlockingQueue<>(CLIENT_QUEUE_CAPACITY);
         try {
-            listener = new ServerSocket(8081);
-            System.out.println("Server is up and running...");
-            while (true) {
-                new Handler(listener.accept()).start();
-            }
+            listener = new ServerSocket(8080);
+            System.out.println("Server is up and running");
+            LocateRegistry.createRegistry(1099);
+            Authenticator loginObj = new Authenticator();
+            Naming.rebind("ObjectForLogin", loginObj);
+            System.out.println("Authentication server is up and running");
+            while (true) new Handler(listener.accept()).start();
         } catch (Exception e) {
             System.out.println("Exception occurred: " + e);
         }

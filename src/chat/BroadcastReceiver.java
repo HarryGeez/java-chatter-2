@@ -14,7 +14,7 @@ public class BroadcastReceiver extends Thread {
     private InetAddress multicastGroupAddress;
     private JTextArea taConvo;
 
-    BroadcastReceiver(ChatScreenForm parent) throws IOException {
+    BroadcastReceiver(ChatForm parent) throws IOException {
         this.mcSocket = parent.mcSocket;
         this.multicastGroupAddress = parent.multicastGroupAddress;
         this.taConvo = parent.taConvo;

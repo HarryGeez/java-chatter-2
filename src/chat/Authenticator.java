@@ -1,9 +1,12 @@
 package chat;
 
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+
 /**
  * Created by weijiangan on 03/10/2016.
  */
-public class Authenticator {
+public class Authenticator extends UnicastRemoteObject implements AuthenticationInterface {
     User[] users = {};
 
     /* To be implemented later
@@ -11,7 +14,7 @@ public class Authenticator {
 
     } */
 
-    Authenticator() {
+    Authenticator() throws RemoteException {
         users = new User[] {
                 new User("Distributed", "123456", User.Type.CLIENT),
                 new User("Client1", "123456", User.Type.CLIENT),
@@ -21,13 +24,13 @@ public class Authenticator {
         };
     }
 
-    public int authenticate(User login) {
+    public int authenticate(String username, String password) {
         int signal = 0;
 
         for (User user:users) {
-            if (login.getId().equalsIgnoreCase(user.getId())) {
+            if (username.equalsIgnoreCase(user.getId())) {
                 signal = -1;
-                if (login.getPw().equals(user.getPw())) {
+                if (password.equals(user.getPw())) {
                     if (user.getType() == User.Type.CLIENT) {
                         signal = 1; // Set as client
                     } else {
