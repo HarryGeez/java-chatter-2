@@ -3,10 +3,7 @@ package chat;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.io.IOException;
 import java.net.Socket;
-import java.rmi.NotBoundException;
-import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 
@@ -62,17 +59,20 @@ public class LoginForm {
         @Override
         public void actionPerformed(ActionEvent e) {
             if (e.getSource() == loginButton) {
-                try {
-                    if (login == null) {
-                        serverIp = tfServerIp.getText();
-                        Registry registry = LocateRegistry.getRegistry(serverIp);
-                        login = (AuthenticationInterface) registry.lookup("ObjectForLogin");
+                new Thread(() -> {
+                    try {
+                        if (login == null) {
+                            serverIp = tfServerIp.getText();
+                            Registry registry = LocateRegistry.getRegistry(serverIp);
+                            login = (AuthenticationInterface) registry.lookup("ObjectForLogin");
+                        }
+                        resolveLogin(login.authenticate(tfUserName.getText(), new String(pfPassword.getPassword())));
+                    } catch (Exception e1) {
+                        JOptionPane.showMessageDialog(frame, "Exception occurred while attempting to log in: " + e1,
+                                "Login Error", JOptionPane.ERROR_MESSAGE);
+                        e1.printStackTrace();
                     }
-                    resolveLogin(login.authenticate(tfUserName.getText(), new String(pfPassword.getPassword())));
-                } catch (Exception e1) {
-                    JOptionPane.showMessageDialog(frame, "Exception occurred while attempting to log in: " + e1,
-                            "Login Error", JOptionPane.ERROR_MESSAGE);
-                }
+                }).start();
             } else if (e.getSource() == tfUserName) {
                 pfPassword.grabFocus();
             } else if (e.getSource() == pfPassword) {
@@ -100,8 +100,9 @@ public class LoginForm {
         frame.setVisible(true);
     }
 
-    private void resolveLogin(int loginResult) throws Exception {
-        switch (loginResult) {
+    private void resolveLogin(String loginResult) throws Exception {
+        String[] retVals = loginResult.split("#");
+        switch (Integer.parseInt(retVals[0])) {
             case 0:
                 JOptionPane.showMessageDialog(frame, "User not found! Please try again.", "Login Error",
                         JOptionPane.ERROR_MESSAGE);
@@ -118,13 +119,14 @@ public class LoginForm {
                 frame.dispose();
                 socket = new Socket(serverIp, Integer.parseInt(tfServerPort.getText()));
                 new Thread(() -> {
-                    new ChatForm(socket).initClient();
+                    new ChatForm(socket, retVals[1]).initClient();
                 }).start();
+                break;
             case 2:
                 frame.dispose();
                 socket = new Socket(serverIp, Integer.parseInt(tfServerPort.getText()));
                 new Thread(() -> {
-                    new ChatForm(socket).initAgent();
+                    new ChatForm(socket, retVals[1]).initAgent();
                 }).start();
                 break;
         }

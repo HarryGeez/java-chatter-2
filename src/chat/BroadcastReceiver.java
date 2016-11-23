@@ -10,26 +10,26 @@ import java.net.MulticastSocket;
  * Created by weijiangan on 18/11/2016.
  */
 public class BroadcastReceiver extends Thread {
+    private InetAddress multicastAddress;
+    private JTextArea textArea;
     private MulticastSocket mcSocket;
-    private InetAddress multicastGroupAddress;
-    private JTextArea taConvo;
 
-    BroadcastReceiver(ChatForm parent) throws IOException {
-        this.mcSocket = parent.mcSocket;
-        this.multicastGroupAddress = parent.multicastGroupAddress;
-        this.taConvo = parent.taConvo;
+    BroadcastReceiver(MulticastSocket mcSocket, InetAddress mcAddress, JTextArea textArea) throws IOException {
+        this.mcSocket = mcSocket;
+        this.multicastAddress = mcAddress;
+        this.textArea = textArea;
     }
 
     public void run() {
         try {
-            mcSocket.joinGroup(multicastGroupAddress);
-            byte[] buffer = new byte[1024];
+            mcSocket.joinGroup(multicastAddress);
+            byte[] buffer = new byte[512];
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 
             while (true) {
                 mcSocket.receive(packet);
                 String received = new String(packet.getData(), 0, packet.getLength());
-                taConvo.append(received + "\n");
+                textArea.append(received + "\n");
             }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(null, "Exception occurred while listening for broadcast: " + e,

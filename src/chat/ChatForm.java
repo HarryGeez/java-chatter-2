@@ -9,13 +9,15 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.io.*;
 import java.net.*;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Created by weijiangan on 14/10/2016.
  */
 public class ChatForm {
-    InetAddress multicastGroupAddress;
-    MulticastSocket mcSocket;
+    private DateTimeFormatter formatter = DateTimeFormatter.ofPattern("hh:mma");
+    private InetAddress multicastAddress;
     private JButton broadcastButton;
     private JButton callButton;
     private JButton sendButton;
@@ -24,16 +26,26 @@ public class ChatForm {
     private JLabel userLabel;
     private JPanel chatPanel;
     private JScrollPane spConvo;
+    private JTextArea taConvo;
     private JTextArea taMessage;
-    private Socket socket;
+    private MulticastSocket mcSocket;
     private PrintWriter out;
+    private Socket socket;
+    private String sessionId;
     private VoiceReceiver receiver;
     private VoiceTransmitter caller;
-    protected JTextArea taConvo;
-    public static volatile boolean CALLING = false;
+    private boolean isClient;
+    private static String USR_NAME;
+    public static final int MC_PORT = 9090;
+    public static final int CA_PORT = 9877;
+    public static final int RC_PORT = 9876;
+    public static final String CA_IP = "127.0.0.1";
 
-    public ChatForm(Socket socket) {
+    ChatForm(Socket socket, String sessionId) {
         this.socket = socket;
+        this.sessionId = sessionId;
+        isClient = false;
+
     }
 
     private class sendMessageListeners implements ActionListener, KeyListener {
@@ -44,8 +56,8 @@ public class ChatForm {
                 if (e.getSource() == sendButton) {
                     out.println(text);
                 } else if (e.getSource() == broadcastButton) {
-                    mcSocket.send(new DatagramPacket(text.getBytes(), text.length(),
-                            multicastGroupAddress, 9090));
+                    text = LocalTime.now().format(formatter) + "  " + USR_NAME + ": " + text;
+                    mcSocket.send(new DatagramPacket(text.getBytes(), text.length(), multicastAddress, MC_PORT));
                 }
                 taMessage.setText("");
             } catch (Exception ex) {
@@ -71,26 +83,28 @@ public class ChatForm {
     private class callButtonListener implements ActionListener {
         @Override
         public void actionPerformed(ActionEvent e) {
-            if (callButton.getText().equals("Call")) {
-                CALLING = true;
+            out.println("/INITCALL " + RC_PORT);
+            /*if (callButton.getText().equals("Call")) {
                 try {
-                    new VoiceTransmitter("127.0.0.1", 9877).start();
-                    new VoiceReceiver(9876, callButton).start();
+                    caller = new VoiceTransmitter(CA_IP, CA_PORT);
+                    receiver = new VoiceReceiver(RC_PORT, callButton);
+                    caller.start();
+                    receiver.start();
                 } catch (BindException e1) {
-                    JOptionPane.showMessageDialog(frame, "Port taken, please use another port", "Call Error",
+                    JOptionPane.showMessageDialog(frame, "Port taken, please use another port", "Error",
                             JOptionPane.ERROR_MESSAGE);
                 } catch (Exception e1) {
-                    JOptionPane.showMessageDialog(frame, "Exception occurred: " + e1, "Call Error",
+                    JOptionPane.showMessageDialog(frame, "Failed to make call: " + e1, "Error",
                             JOptionPane.ERROR_MESSAGE);
                     System.exit(1);
                 }
-                callButton.setText("Hang up");
-
+                callButton.setText("End Call");
             } else {
-                CALLING = false;
                 callButton.setEnabled(false);
+                caller.kill();
+                receiver.kill();
                 callButton.setText("Call");
-            }
+            }*/
         }
     }
 
@@ -123,38 +137,56 @@ public class ChatForm {
         file.setMnemonic(KeyEvent.VK_F);
 
         // File menu items
-        JMenuItem miSave = new JMenuItem("Save conversation...");
-        JMenuItem miExit = new JMenuItem("Exit");
+        JMenuItem fileNew = new JMenuItem("New Conversation");
+        JMenuItem fileSave = new JMenuItem("Save Conversation...");
+        JMenuItem fileExit = new JMenuItem("Exit");
 
-        // Save conversation actions
-        miSave.addActionListener((ActionEvent e) -> {
-            fileChooser = new JFileChooser();
-            int returnVal = fileChooser.showSaveDialog(frame);
-            if (returnVal == JFileChooser.APPROVE_OPTION) {
-                try {
-                    FileWriter fw = new FileWriter(fileChooser.getSelectedFile() + ".txt");
-                    fw.write(taConvo.getText());
-                    fw.close();
-                } catch (Exception ex) {
-                    System.out.println("Exception occurred " + ex);
+        class MenuListener implements ActionListener {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (e.getSource() == fileNew) {
+                    try {
+                        Socket newSocket = new Socket(socket.getInetAddress(), socket.getPort());
+                        new Thread(() -> {
+                            new ChatForm(newSocket, sessionId).initAgent();
+                        }).start();
+                    } catch (Exception e1) {
+                        JOptionPane.showMessageDialog(frame, "Error creating new conversation: " + e,
+                                "New Conversation", JOptionPane.ERROR_MESSAGE);
+                    }
+                } else if (e.getSource() == fileSave) {
+                    fileChooser = new JFileChooser();
+                    int returnVal = fileChooser.showSaveDialog(frame);
+                    if (returnVal == JFileChooser.APPROVE_OPTION) {
+                        try {
+                            FileWriter fw = new FileWriter(fileChooser.getSelectedFile() + ".txt");
+                            fw.write(taConvo.getText());
+                            fw.close();
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                        }
+                    }
+                } else if (e.getSource() == fileExit) {
+                    System.exit(0);
                 }
             }
-        });
+        }
 
-        // Exit actions
-        miExit.setMnemonic(KeyEvent.VK_E);
-        miExit.addActionListener((ActionEvent e) -> {
-            System.exit(0);
-        } );
+        fileNew.addActionListener(new MenuListener());
+        fileSave.addActionListener(new MenuListener());
+        fileExit.setMnemonic(KeyEvent.VK_E);
+        fileExit.addActionListener(new MenuListener());
 
-        file.add(miSave);
-        file.add(miExit);
+        file.add(fileNew);
+        file.add(fileSave);
+        file.add(fileExit);
         menuBar.add(file);
         frame.setJMenuBar(menuBar);
     }
 
     void initClient() {
         initGui();
+        isClient = true;
         userLabel.setText("Waiting for agent... Please be patient\n");
         sendButton.setEnabled(true);
         run();
@@ -165,31 +197,37 @@ public class ChatForm {
         sendButton.setEnabled(true);
         broadcastButton.setEnabled(true);
         createMenuBar();
-        Dimension curSize = frame.getSize();
-        curSize.height += 20;
-        frame.setSize(curSize);
+        frame.pack();
+        frame.setMinimumSize(frame.getSize());
         userLabel.setText("Finding customer in queue...\n");
         run();
     }
 
-    void run() {
+    private void run() {
         try {
-            multicastGroupAddress = InetAddress.getByName("224.0.1.0");
-            mcSocket = new MulticastSocket(9090);
-            String message;
             out = new PrintWriter(socket.getOutputStream(), true);
+            out.println(sessionId);
             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-
+            String[] tokens = in.readLine().split("#");
+            System.out.println(tokens[0].substring(1));
+            multicastAddress = InetAddress.getByName(tokens[0].substring(1));
+            mcSocket = new MulticastSocket(9090);
+            USR_NAME = tokens[1];
+            if (isClient) {
+                out.println(tokens[2]);
+            }
             // Listen for broadcast
-            new BroadcastReceiver(this).start();
+            new BroadcastReceiver(mcSocket, multicastAddress, taConvo).start();
 
             while (true) {
-                message = in.readLine();
+                String message = in.readLine();
+                if (message == null) break;
                 taConvo.append(message + "\n");
             }
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(frame, "Exception occurred: " + e, "Login Error",
+            JOptionPane.showMessageDialog(frame, "Exception occurred: " + e, "Oops",
                     JOptionPane.ERROR_MESSAGE);
+            e.printStackTrace();
             System.exit(1);
         }
     }
